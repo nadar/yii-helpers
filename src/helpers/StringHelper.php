@@ -138,47 +138,70 @@ class StringHelper extends BaseStringHelper
     }
 
     /**
-     * TypeCast a numeric value to float or integer.
+     * Type-casts a numeric string to int or float.
      *
-     * If the given value is not a numeric or float value it will be returned as it is. In order to find out whether it's float
-     * or not use {{luya\yii\helpers\StringHelper::isFloat()}}.
+     * Only string inputs are considered for casting. Non-strings are returned unchanged to avoid
+     * surprising conversions (e.g. already-typed ints/floats, objects, arrays).
      *
-     * @param mixed $value The given value to parse.
-     * @return mixed Returns the original value if not numeric or integer, float casted value.
+     * Rules:
+     * - Integers are cast when the string is a canonical integer (no leading zeros, except "0").
+     * - Floats are cast only when the string matches our "canonical float" format (see isFloat()).
+     * - Everything else is returned unchanged.
+     *
+     * @param mixed $value The value to parse.
+     * @return mixed Returns the original value if it should not be cast, otherwise int/float.
      */
     public static function typeCastNumeric($value)
     {
-        if (!self::isFloat($value)) {
+        // Only cast strings; leave everything else as-is.
+        if (!is_string($value)) {
             return $value;
         }
-
-        if (intval($value) == $value) {
-            return (int) $value;
+    
+        $s = trim($value);
+    
+        // Integer: no leading zeros (except "0"), optional minus sign.
+        if (preg_match('/^-?(?:0|[1-9]\d*)$/', $s)) {
+            return (int) $s;
         }
-
-        return (float) $value;
+    
+        // Float: strict canonical float (see isFloat()).
+        if (self::isFloat($s)) {
+            return (float) $s;
+        }
+    
+        return $value;
     }
-
+    
     /**
-     * Checks whether a string is a float value.
+     * Checks whether a value represents a float in our canonical string format.
      *
-     * Compared to `is_float()` function of PHP, it only ensures whether the input variable is type float.
+     * Notes:
+     * - PHP's is_float() only checks the variable type, not whether a string "looks like" a float.
+     * - We purposely accept only strings with a decimal point and a non-zero final digit.
      *
-     * @param mixed $value The value to check whether it's float or not.
-     * @return boolean Whether it's a float value or not.
+     * @param mixed $value The value to check.
+     * @return bool Whether the value is a canonical float string (or already a float).
      */
     public static function isFloat($value)
     {
         if (is_float($value)) {
             return true;
         }
-
-        if (!is_array($value) && preg_match('/^\d+\.$/', $value)) {
-            // ordinal number of the form cardinal number followed by point, e.g. "24."
-            return false;
-        }
-
-        return ($value == (string)(float) $value);
+    
+        // Float string must:
+        // - have an integer part without leading zeros (except "0")
+        // - contain a decimal point
+        // - end with a non-zero digit
+        //
+        // Examples:
+        // - "26.5002"  => float (ends with 2)
+        // - "26.50020" => not a float here (ends with 0, keep as string)
+        // - "1.0"      => not a float here (ends with 0, keep as string)
+        //
+        // This prevents losing meaningful formatting (typically trailing zeros) that might be
+        // required for display, precision, or domain-specific values.
+        return is_string($value) && preg_match('/^-?(?:0|[1-9]\d*)\.\d*[1-9]$/', $value) === 1;
     }
 
     /**
